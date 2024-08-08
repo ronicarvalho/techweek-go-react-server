@@ -11,28 +11,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const getMessage = `-- name: GetMessage :one
-SELECT
-    id, room_id, message, reaction_count, answered
-FROM
-    messages
-WHERE 
-    room_id = $1
-`
-
-func (q *Queries) GetMessage(ctx context.Context, roomID uuid.UUID) (Message, error) {
-	row := q.db.QueryRow(ctx, getMessage, roomID)
-	var i Message
-	err := row.Scan(
-		&i.ID,
-		&i.RoomID,
-		&i.Message,
-		&i.ReactionCount,
-		&i.Answered,
-	)
-	return i, err
-}
-
 const getRoom = `-- name: GetRoom :one
 SELECT
     id, theme
@@ -47,6 +25,63 @@ func (q *Queries) GetRoom(ctx context.Context, id uuid.UUID) (Room, error) {
 	var i Room
 	err := row.Scan(&i.ID, &i.Theme)
 	return i, err
+}
+
+const getRoomMessage = `-- name: GetRoomMessage :one
+SELECT
+    id, room_id, message, reaction_count, answered
+FROM
+    messages
+WHERE 
+    id = $1
+`
+
+func (q *Queries) GetRoomMessage(ctx context.Context, id uuid.UUID) (Message, error) {
+	row := q.db.QueryRow(ctx, getRoomMessage, id)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.RoomID,
+		&i.Message,
+		&i.ReactionCount,
+		&i.Answered,
+	)
+	return i, err
+}
+
+const getRoomMessages = `-- name: GetRoomMessages :many
+SELECT
+    id, room_id, message, reaction_count, answered
+FROM
+    messages
+WHERE 
+    room_id = $1
+`
+
+func (q *Queries) GetRoomMessages(ctx context.Context, roomID uuid.UUID) ([]Message, error) {
+	rows, err := q.db.Query(ctx, getRoomMessages, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Message
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoomID,
+			&i.Message,
+			&i.ReactionCount,
+			&i.Answered,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getRooms = `-- name: GetRooms :many
@@ -76,24 +111,6 @@ func (q *Queries) GetRooms(ctx context.Context) ([]Room, error) {
 	return items, nil
 }
 
-const insertMessage = `-- name: InsertMessage :one
-INSERT INTO messages (room_id, message)
-VALUES ($1, $2)
-RETURNING id
-`
-
-type InsertMessageParams struct {
-	RoomID  uuid.UUID
-	Message string
-}
-
-func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, insertMessage, arg.RoomID, arg.Message)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
-}
-
 const insertRoom = `-- name: InsertRoom :one
 INSERT INTO rooms (theme)
 VALUES ($1)
@@ -102,6 +119,24 @@ RETURNING id
 
 func (q *Queries) InsertRoom(ctx context.Context, theme string) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, insertRoom, theme)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertRoomMessage = `-- name: InsertRoomMessage :one
+INSERT INTO messages (room_id, message)
+VALUES ($1, $2)
+RETURNING id
+`
+
+type InsertRoomMessageParams struct {
+	RoomID  uuid.UUID
+	Message string
+}
+
+func (q *Queries) InsertRoomMessage(ctx context.Context, arg InsertRoomMessageParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, insertRoomMessage, arg.RoomID, arg.Message)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
