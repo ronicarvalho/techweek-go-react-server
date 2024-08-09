@@ -56,15 +56,19 @@ func NewHandler(q *pgstore.Queries) http.Handler {
 			r.Post("/", a.handleCreateRoom)
 			r.Get("/", a.handleGetRooms)
 
-			r.Route("/{room_id}/messages", func(r chi.Router) {
-				r.Post("/", a.handleCreateMessage)
-				r.Get("/", a.handleGetRoomMessages)
+			r.Route("/{room_id}", func(r chi.Router) {
+				r.Get("/", a.handleGetRoom)
 
-				r.Route("/{message_id}", func(r chi.Router) {
-					r.Get("/", a.handleGetRoomMessage)
-					r.Patch("/react", a.handleReactToMessage)
-					r.Delete("/react", a.handleRemoveReactFromMessage)
-					r.Patch("/answer", a.handleMarkMessageAsAnswered)
+				r.Route("/messages", func(r chi.Router) {
+					r.Post("/", a.handleCreateMessage)
+					r.Get("/", a.handleGetRoomMessages)
+
+					r.Route("/{message_id}", func(r chi.Router) {
+						r.Get("/", a.handleGetRoomMessage)
+						r.Patch("/react", a.handleReactToMessage)
+						r.Delete("/react", a.handleRemoveReactFromMessage)
+						r.Patch("/answer", a.handleMarkMessageAsAnswered)
+					})
 				})
 			})
 		})
@@ -216,6 +220,32 @@ func (h apiHandler) handleGetRooms(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	data, _ := json.Marshal(payload)
+	w.Write(data)
+}
+
+func (h apiHandler) handleGetRoom(w http.ResponseWriter, r *http.Request) {
+
+	rawRoomID := chi.URLParam(r, "room_id")
+	roomID, err := uuid.Parse(rawRoomID)
+	if err != nil {
+		http.Error(w, "invalid room id", http.StatusBadRequest)
+		return
+	}
+
+	room, err := h.q.GetRoom(r.Context(), roomID)
+	if err != nil {
+		slog.Error("failed to get rooms", "error", err)
+		http.Error(w, "something went wrong", http.StatusInternalServerError)
+		return
+	}
+
+	type response struct {
+		ID    string `json:"id"`
+		Theme string `json:"theme"`
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	data, _ := json.Marshal(response{ID: room.ID.String(), Theme: room.Theme})
 	w.Write(data)
 }
 
