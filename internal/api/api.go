@@ -85,6 +85,16 @@ type MessageCreated struct {
 	Message string `json:"message"`
 }
 
+type MessageReacted struct {
+	ID      string `json:"id"`
+	Message int64  `json:"count"`
+}
+
+type MessageAnswered struct {
+	ID      string `json:"id"`
+	Message bool   `json:"answered"`
+}
+
 type Message struct {
 	Kind   string `json:"kind"`
 	Value  any    `json:"value"`
@@ -166,7 +176,7 @@ func (h apiHandler) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	roomID, err := h.q.InsertRoom(r.Context(), body.Theme)
+	roomID, err := h.q.CreateRoom(r.Context(), body.Theme)
 	if err != nil {
 		slog.Error("failed to insert room", "error", err)
 		http.Error(w, "something went wrong", http.StatusInternalServerError)
@@ -238,7 +248,7 @@ func (h apiHandler) handleCreateMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	messageID, err := h.q.InsertRoomMessage(r.Context(), pgstore.InsertRoomMessageParams{RoomID: roomID, Message: body.Message})
+	messageID, err := h.q.CreateRoomMessage(r.Context(), pgstore.CreateRoomMessageParams{RoomID: roomID, Message: body.Message})
 	if err != nil {
 		slog.Error("failed to insert message", "error", err)
 		http.Error(w, "something went wrong", http.StatusInternalServerError)
@@ -345,7 +355,7 @@ func (h apiHandler) handleReactToMessage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, err = h.q.ReactToMessage(r.Context(), messageID)
+	count, err := h.q.CreateReaction(r.Context(), messageID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "message not found", http.StatusBadRequest)
@@ -367,7 +377,10 @@ func (h apiHandler) handleReactToMessage(w http.ResponseWriter, r *http.Request)
 	go h.notifyClients(Message{
 		Kind:   MessageReactedKind,
 		RoomID: rawRoomID,
-		Value:  "message was reacted",
+		Value: MessageReacted{
+			ID:      messageID.String(),
+			Message: count,
+		},
 	})
 }
 
@@ -381,7 +394,7 @@ func (h apiHandler) handleRemoveReactFromMessage(w http.ResponseWriter, r *http.
 		return
 	}
 
-	_, err = h.q.UnReactToMessage(r.Context(), messageID)
+	count, err := h.q.RemoveReaction(r.Context(), messageID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "message not found", http.StatusBadRequest)
@@ -403,7 +416,10 @@ func (h apiHandler) handleRemoveReactFromMessage(w http.ResponseWriter, r *http.
 	go h.notifyClients(Message{
 		Kind:   MessageReactedKind,
 		RoomID: rawRoomID,
-		Value:  "message was answered",
+		Value: MessageReacted{
+			ID:      messageID.String(),
+			Message: count,
+		},
 	})
 }
 
@@ -417,7 +433,7 @@ func (h apiHandler) handleMarkMessageAsAnswered(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	_, err = h.q.MarkMessageAsAnswered(r.Context(), messageID)
+	answered, err := h.q.AnswerMessage(r.Context(), messageID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, "message not found", http.StatusBadRequest)
@@ -439,6 +455,9 @@ func (h apiHandler) handleMarkMessageAsAnswered(w http.ResponseWriter, r *http.R
 	go h.notifyClients(Message{
 		Kind:   MessageAnsweredKind,
 		RoomID: rawRoomID,
-		Value:  "message was answered",
+		Value: MessageAnswered{
+			ID:      messageID.String(),
+			Message: answered,
+		},
 	})
 }

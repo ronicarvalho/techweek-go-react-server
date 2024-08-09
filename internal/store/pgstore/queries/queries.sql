@@ -12,7 +12,7 @@ SELECT
 FROM
     rooms;
 
--- name: InsertRoom :one
+-- name: CreateRoom :one
 INSERT INTO rooms (theme)
 VALUES ($1)
 RETURNING id;
@@ -33,12 +33,12 @@ FROM
 WHERE 
     id = $1;
 
--- name: InsertRoomMessage :one
+-- name: CreateRoomMessage :one
 INSERT INTO messages (room_id, message)
 VALUES ($1, $2)
 RETURNING id;
 
--- name: ReactToMessage :one
+-- name: CreateReaction :one
 UPDATE messages
 SET
     reaction_count = reaction_count +1
@@ -46,7 +46,7 @@ WHERE
     id = $1
 RETURNING reaction_count;
 
--- name: UnReactToMessage :one
+-- name: RemoveReaction :one
 UPDATE messages
 SET
     reaction_count = reaction_count -1
@@ -54,10 +54,10 @@ WHERE
     id = $1
 RETURNING reaction_count;
 
--- name: MarkMessageAsAnswered :one
+-- name: AnswerMessage :one
 UPDATE messages
 SET
     answered = true
 WHERE
     id = $1
-RETURNING reaction_count;
+RETURNING answered;
